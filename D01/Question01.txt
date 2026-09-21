@@ -1,0 +1,32 @@
+1.shape就是张量tensor的维度说明，dtype是数据类型，cuda=false代表没有可用的cuda版本的GPU，
+但张量创建不影响
+
+2.x[1,2,3]的值是23，第一组均值是5.5，第二组均值是17.5
+
+3.reshape失败是因为，值创建了24个张量值，而(2,4,4)有32个值需要对应，最小的改动是reshape(2,3,4)或者
+torch.arange(32)
+
+4.[2,3,8,8]与[8,8,103],这两个张量一个是4维的，一个是3维的，并不相同维度，需要做降维或者升维，才能当作
+同一个模型的输入。
+
+5.
+x=torch.rand(4,1,6,6)
+mean_value=x.mean(dim=(1,2,3))
+max_value=x.amax(dim=(1,2,3))
+print("每张图均值：",mean_value)
+print("每张图最大值",max_value)
+
+torch.save(
+    {
+    "images":x,
+    "mean":mean_value,
+    "max":max_value
+    },
+    "day01_output.pt"
+)
+
+6补验.
+y=torch.rand(3,5,7)
+y_mean=y.mean(dim=(0,1))
+
+dim就是维度，y是（H，W，B），按维度dim=2就是波段，空间就是dim=(0,1)

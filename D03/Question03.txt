@@ -1,0 +1,39 @@
+1.return解决函数返回值的问题，print只是打印变量的值，对代码本身无影响，对象属性是定义对象内部的属性成员
+，在创建类实例时可以直接调用类属性
+
+2.dataset[2]调用__getitem__方法，len(dataset)调用__len__方法
+
+3.可变类变量被实例共享。改在__init__中创建self.items=list(items)，用两个实例分别增添内容测试隔离
+def __init__(self):
+    self.items = []
+
+4.能复用按索引返回输入与标签的接口，但输入形状、标签映射和预处理需改变；调用者不应假定一定是RGB。
+
+5.class Guangpu(Dataset):
+    def __init__(self):
+        if len(data) != len(label):
+            raise ValueError("光谱数量和标签数量不一致")
+        self.data=torch.rand(4,8)   ## 4条光谱，每条光谱有8个波段
+        self.label=torch.tensor([1,2,3,4])
+    def __getitem__(self, index):
+        if index>=len(self.data):
+            raise IndexError("越界")
+        elif index < -len(self):
+            raise IndexError("负索引")      #索引-1是最后一个样本，-2是倒数第二个样本
+        return self.data[index],self.label[index]
+    def __len__(self):
+        return len(self.data)
+
+dataset=Guangpu()
+u,v=dataset[0]
+print("第一个样本：", u, v)
+
+# 负索引，返回最后一个样本
+u,v = dataset[-1]
+print("最后一个样本：", u,v)
+
+# 越界检查
+try:
+    dataset[4]
+except IndexError as error:
+    print("捕获越界错误：", error)

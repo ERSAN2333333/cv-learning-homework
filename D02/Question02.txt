@@ -1,0 +1,34 @@
+1.reshpae就是指改变维度，但不改变原本张量的顺序排列，permute不一定改变底层内存中的元素顺序，而是改变访问
+方式。总结就是permute相对位置发生了变化
+
+2.两个[3,4]张量沿dim=1分别cat、stack，cat的形状是[3,8],stack的形状是[3,2,4]
+
+3.向量也是张量，并且完全可以参与广播。
+图像：[2,3,4,5]
+向量：[3]
+广播默认从最后一维对齐，3会尝试对应宽度维度5，所以形状不匹配
+
+4.(1,1,B)
+
+5.x1=torch.rand(2,3,4,5) #(B,C,H,W)
+x1_c=x1.permute(1,0,3,2)  #(C,B,W,H)
+x2=x1_c.permute(1,0,3,2)    #(B,C,H,W)
+print(torch.equal(x1,x2))
+print(x1[0,1,2,3]==x2[0,1,2,3])
+
+6补验.
+x11=torch.arange(72).reshape(2,3,4,3)
+vec=torch.tensor([1,2,3])
+print(vec.shape)
+x22=x11+vec
+print(x22[0,0]-x11[0,0])
+print(x22[0,1]-x11[0,1])
+print(x22[0,2]-x11[0,2])
+
+
+vec=torch.tensor([1,2,3]).reshape(1,3,1,1)
+print(vec.shape)
+x22=x11+vec
+print(x22[0,0]-x11[0,0])
+print(x22[0,1]-x11[0,1])
+print(x22[0,2]-x11[0,2])

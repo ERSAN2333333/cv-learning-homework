@@ -1,0 +1,65 @@
+1.模型权重是模型加载权重时候用的，pytorch框架有model.load_state_dict(...)方法加载模型权重，所以要单独保存
+环境依赖一般是requirement.txt，一般运行项目前就应该单独先做完这一步
+配置文件一般是模型的参数设置，这三个都不是面相一个任务和时刻的，所以要单独保存
+
+2./a/data
+
+3.应该先比较：
+import sys
+print(sys.executable)
+分别检查：
+    - 终端使用哪个Python；
+    - 编辑器使用哪个Python。
+然后使用对应解释器检查：
+    python -m pip show torch
+很可能是终端和编辑器使用了两个不同的Python环境
+
+4.应该将本地绝对路径改成配置项
+本地运行时传本地路径，AutoDL运行时传服务器路径。代码不修改，只修改配置。
+
+5.import argparse
+import json
+import sys
+
+parser=argparse.ArgumentParser()
+
+config=(
+    {
+        "lr":0.01,
+        "batch_size":8,
+        "data-root":"data"
+    }
+)
+
+# 配置文件始终放在当前脚本旁边
+script_dir = Path(__file__).resolve().parent.parent
+config_path = script_dir / "homework5.json"
+print(config_path)
+
+with open(config_path,"w",encoding="utf-8") as f:
+    json.dump(config,f)
+
+with open(config_path,"r",encoding="utf-8") as f:
+    json_config=json.load(f)
+
+print(json_config)
+
+# 相对数据目录以配置文件所在目录为基准
+data_root = (
+    config_path.parent / json_config["data-root"]
+).resolve()
+
+data_file = data_root / "homework5.txt"
+
+print("配置文件：", config_path)
+print("数据根目录：", data_root)
+print("实际查找文件：", data_file)
+
+if not data_file.is_file():
+    raise FileNotFoundError(
+        f"找不到数据文件：{data_file}；"
+        f"请检查配置中的data-root字段"
+    )
+
+print("文件路径存在")
+print(data_file.read_text(encoding="utf-8"))
