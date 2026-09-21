@@ -1,0 +1,19 @@
+# 数据
+data/
+
+# 模型权重
+weights/
+*.pt
+*.pth
+*.ckpt
+
+# Python缓存
+__pycache__/
+*.pyc
+
+# 其他缓存
+.pytest_cache/
+.ipynb_checkpoints/
+
+# 日志
+*.log
