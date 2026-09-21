@@ -1,0 +1,12 @@
+{
+  "run_id": "exp002_lr0003",
+  "purpose": "教学用合成二分类；只改变学习率",
+  "model": "Linear(3,8)-ReLU-Linear(8,2)",
+  "lr": 0.0003,
+  "batch_size": 16,
+  "epochs": 8,
+  "seed": 42,
+  "data_seed": 2026,
+  "selection": "验证集准确率最高；并列取最早轮",
+  "code_file": "generate_demo_weights.py"
+}
