@@ -1,0 +1,37 @@
+1。轴约定、单位、样本来源不同；形状仅约束尺寸，必须给出语义与元数据。
+
+
+2.每条光谱10个值，总共有48个位置
+
+3.需transpose/permute；用每个位置和波段都可识别的编号，核对对应坐标，随机数据仅看图可能难发现。
+
+4.import torch
+import json
+H=8
+W=8
+L=10
+cube=torch.rand(H,W,L)
+cube_mean=cube.mean(dim=(0,1))
+print(cube_mean)
+
+config=({
+    "H":8,
+    "W":8,
+    "L":10
+})
+
+with open("config06.json","w",encoding="utf-8") as f:
+    json.dump(config,f)
+
+with open("config06.json","r",encoding="utf-8") as f:
+    config_f=json.load(f)
+
+assert config_f["H"]==H and config_f["W"]==W and config_f["L"]==L
+print("形状对应")
+
+5.不一定能复现之前的实验，因为配置和参数和代码都不确定是否发生修改，这都会导致实验结果变化
+
+6.我先阅读报错，确认缺少的是哪个文件；然后打印当前工作目录、脚本位置和路径解析后的绝对路径。
+接着用exists()和is_file()检查文件是否存在，并核对目录名、文件名、扩展名及大小写。
+如果路径来自配置文件或命令行参数，还要打印实际读取的路径。确认问题来自启动位置、配置错误还是路径
+拼接错误后再修复，而不是重装软件，因为路径错误通常与软件安装无关。
