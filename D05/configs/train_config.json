@@ -1,6 +1,6 @@
 {
     "model": "simple_cnn",
-    "lr": 0.001,
+    "lr": 0.03,
     "batch_size": 32,
     "epochs": 10,
     "weight_decay": 0.0001,
