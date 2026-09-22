@@ -1,0 +1,34 @@
+1.训练集用于计算损失、反向传播和更新参数。验证集用于训练期间选择模型、调整超参数，但不更新参数。
+测试集只在最终确定模型后使用，用于评价最终效果。
+
+2.共16个批次，尾批次20个样本
+
+3.重复调用random_split可能得到不同的训练集和验证集。这样两个模型的准确率差异可能来自数据划分，
+而不一定来自模型本身。比较模型时应该使用同一份保存的训练和验证索引。
+
+4.虽然通道多了，但是每个通道还是一样的，模型对不同通道训练但是里面的空间信息都是一样的，图像内容没有增加
+真正的RGB三个通道应该都是不同信息，这个不同通道相同信息。并没有增加信息，只是重复样本信息
+
+5.traindataset,valdataset,unused=random_split(all_train_dataset,[2000,500,total-2500],generator=torch.Generator().manual_seed(42))
+
+
+train_indices=set(traindataset.indices)
+val_indices=set(valdataset.indices)
+same_indices=train_indices.intersection(val_indices)
+assert len(same_indices)==0
+print("训练验证没有相交)
+
+trainloader=DataLoader(traindataset,batch_size=32,shuffle=True)
+valloader=DataLoader(valdataset,batch_size=32,shuffle=False)
+
+# 取一个批次中的16张
+images, labels = next(iter(trainloader))
+
+figures,axes=plt.subplots(4,4,figsize=(8,8))
+for image,labels,axis in zip(images[:16],labels[:16],axes.ravel()):
+    image=image*0.5+0.5
+    axis.imshow(image.squeeze(0),cmap="gray")
+    axis.set_title(class_names[label.item()])
+    axis.axis("off")
+plt.tight_layout()
+plt.show()
