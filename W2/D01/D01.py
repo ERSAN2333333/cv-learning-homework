@@ -51,111 +51,112 @@ class FashionMNISTDataset(Dataset):
         return image, label
 
 
-# 三、创建数据集并划分
+if __name__ == "__main__":
+    # 三、创建数据集并划分
 
-transform = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Normalize([0.5], [0.5])
-])
+    transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize([0.5], [0.5])
+    ])
 
-all_train_dataset = FashionMNISTDataset(
-    data_root + "/train-images-idx3-ubyte",
-    data_root + "/train-labels-idx1-ubyte",
-    transform
-)
+    all_train_dataset = FashionMNISTDataset(
+        data_root + "/train-images-idx3-ubyte",
+        data_root + "/train-labels-idx1-ubyte",
+        transform
+    )
 
-unused_count = len(all_train_dataset) - 2000 - 500
+    unused_count = len(all_train_dataset) - 2000 - 500
 
-train_dataset, val_dataset, unused_dataset = random_split(
-    all_train_dataset,
-    [2000, 500, unused_count],
-    generator=torch.Generator().manual_seed(42)
-)
+    train_dataset, val_dataset, unused_dataset = random_split(
+        all_train_dataset,
+        [2000, 500, unused_count],
+        generator=torch.Generator().manual_seed(42)
+    )
 
-torch.save(
-    {
-        "train": train_dataset.indices,
-        "val": val_dataset.indices
-    },
-    "/Users/ersan/rs_cvpy/cv_learning/W2/D01/split_indices.pt"
-)
+    torch.save(
+        {
+            "train": train_dataset.indices,
+            "val": val_dataset.indices
+        },
+        "/Users/ersan/rs_cvpy/cv_learning/W2/D01/split_indices.pt"
+    )
 
-train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
-val_loader = DataLoader(val_dataset, batch_size=16, shuffle=False)
-
-
-# 四、检查数据
-
-images, labels = next(iter(train_loader))
-
-print("批次形状：", images.shape)
-print("输入最小值：", images.min().item())
-print("输入最大值：", images.max().item())
-print("标签类型：", labels.dtype)
-
-assert images.min() >= -1
-assert images.max() <= 1
-assert labels.dtype == torch.int64
-
-train_indices = set(train_dataset.indices)
-val_indices = set(val_dataset.indices)
-same_indices = train_indices.intersection(val_indices)
-
-print("重复索引数量：", len(same_indices))
-assert len(same_indices) == 0
-
-for batch_images, batch_labels in train_loader:
-    train_last_batch = len(batch_labels)
-
-for batch_images, batch_labels in val_loader:
-    val_last_batch = len(batch_labels)
-
-print("训练集数量：", len(train_dataset))
-print("验证集数量：", len(val_dataset))
-print("训练集最后一批：", train_last_batch)
-print("验证集最后一批：", val_last_batch)
+    train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=16, shuffle=False)
 
 
-# 五、显示16张图片并核对类别名
+    # 四、检查数据
 
-class_names = [
-    "T-shirt/top",
-    "Trouser",
-    "Pullover",
-    "Dress",
-    "Coat",
-    "Sandal",
-    "Shirt",
-    "Sneaker",
-    "Bag",
-    "Ankle boot"
-]
+    images, labels = next(iter(train_loader))
 
-figure, axes = plt.subplots(4, 4, figsize=(8, 8))
+    print("批次形状：", images.shape)
+    print("输入最小值：", images.min().item())
+    print("输入最大值：", images.max().item())
+    print("标签类型：", labels.dtype)
 
-for image, label, axis in zip(images, labels, axes.ravel()):
-    image = image * 0.5 + 0.5
-    label_number = label.item()
+    assert images.min() >= -1
+    assert images.max() <= 1
+    assert labels.dtype == torch.int64
 
-    axis.imshow(image.squeeze(0), cmap="gray")
-    axis.set_title(class_names[label_number])
-    axis.axis("off")
+    train_indices = set(train_dataset.indices)
+    val_indices = set(val_dataset.indices)
+    same_indices = train_indices.intersection(val_indices)
 
-plt.tight_layout()
-plt.show()
+    print("重复索引数量：", len(same_indices))
+    assert len(same_indices) == 0
+
+    for batch_images, batch_labels in train_loader:
+        train_last_batch = len(batch_labels)
+
+    for batch_images, batch_labels in val_loader:
+        val_last_batch = len(batch_labels)
+
+    print("训练集数量：", len(train_dataset))
+    print("验证集数量：", len(val_dataset))
+    print("训练集最后一批：", train_last_batch)
+    print("验证集最后一批：", val_last_batch)
 
 
-test_train_indices=train_indices.copy()
-test_val_indices=val_indices.copy()
+    # 五、显示16张图片并核对类别名
 
-repear_index=train_dataset.indices[0]
-test_val_indices.add(repear_index)
-# 再次检查交集
-test_same_indices = test_train_indices.intersection(
-    test_val_indices
-)
+    class_names = [
+        "T-shirt/top",
+        "Trouser",
+        "Pullover",
+        "Dress",
+        "Coat",
+        "Sandal",
+        "Shirt",
+        "Sneaker",
+        "Bag",
+        "Ankle boot"
+    ]
 
-print("故意加入的重复索引：", repear_index)
-print("检测到的重复索引：", test_same_indices)
+    figure, axes = plt.subplots(4, 4, figsize=(8, 8))
 
-assert len(test_same_indices) == 0, "检测到训练集和验证集存在重复样本"
+    for image, label, axis in zip(images, labels, axes.ravel()):
+        image = image * 0.5 + 0.5
+        label_number = label.item()
+
+        axis.imshow(image.squeeze(0), cmap="gray")
+        axis.set_title(class_names[label_number])
+        axis.axis("off")
+
+    plt.tight_layout()
+    plt.show()
+
+
+    test_train_indices=train_indices.copy()
+    test_val_indices=val_indices.copy()
+
+    repear_index=train_dataset.indices[0]
+    test_val_indices.add(repear_index)
+    # 再次检查交集
+    test_same_indices = test_train_indices.intersection(
+        test_val_indices
+    )
+
+    print("故意加入的重复索引：", repear_index)
+    print("检测到的重复索引：", test_same_indices)
+
+    assert len(test_same_indices) == 0, "检测到训练集和验证集存在重复样本"

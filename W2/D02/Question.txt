@@ -1,0 +1,17 @@
+1.logits是模型输出的一个类别分数矩阵，softmax概率是将这些类别分数矩阵变成和为1的分数矩阵，
+argmax是从类别分数矩阵中选中最大分数的作为输出类别最后预测
+
+2.(784×128+128) + (128×128+128) + (128×10+10)=118282
+
+3.因为argmax已经得到一个具体的一维标签，CrossEntropyLoss需要形状为[batch, 类别数]的logits和
+形状为[batch]的真实标签。
+
+4.必须修改最后的全连接层的最后out_channel为9，衣物改成地物，二维图像也变成三维了，读取图像和图像预处理也
+要跟着改变.还要检查标签编号是否映射到0～8，以及模型第一层的输入长度是否仍是784
+
+5.# logits_after形状：[1, 3]，表示1个样本、3个类别
+assert labels.shape[0] == logits_after.shape[0], "标签数与样本数不一致"
+assert labels.dtype == torch.int64, "标签必须是整数类型"
+assert labels.min() >= 0 and labels.max() < logits_after.shape[1], "类别编号越界"
+
+print("标签检查通过")

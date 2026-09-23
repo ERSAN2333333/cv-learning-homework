@@ -1,0 +1,41 @@
+1.三者不能互相替代。梯度“非空”只说明算出了梯度，不保证step()执行了，也不保证参数一定变化；
+参数变化不保证loss下降。应分别检查：损失数值、参数的.grad、step()前后的参数值。
+
+2.梯度 = 6×(3×2−1) = 30
+更新后 w = 2 − 0.01×30 = 1.7
+
+3.loss.item()会得到一个普通Python数字。只有这个数字时，已经没有从loss回到模型参数的计算关系，
+不能对它调用backward()。正确顺序是对原来的张量调用：
+loss.backward()
+print(loss.item())
+补充一个容易混淆的细节：调用过loss.item()本身不会破坏原来的loss张量；失败的是把loss.item()的结果
+当成loss去反传。
+
+4.检查requires_grad=False，再比较更新前后主干权重是否相同，方向正确。还应同时确认分类头的参数确实发生变化，
+否则可能是整个模型都没训练。比较权重时要先用.detach().clone()保存更新前的副本。
+
+5.一次训练更新会更改参数，一次仅前向验证并不会改变参数和计算新梯度，他们的权重应该相同
+def compare_train_and_val(trainloader,valloader,model,loss_fn,optimizer):
+    model.train()
+    train_data,train_label=next(iter(trainloader))
+    before_train=model.block[0].weight.detach().clone()
+
+    optimizer.zero_grad()
+    train_pred=model(train_data)
+    train_loss=loss_fn(train_pred,train_label)
+    train_loss.backward()
+    optimizer.step()
+
+    after_train=model.block[0].weight.detach().clone()
+    print("训练后参数变化：",not torch.equal(before_train,after_train))
+
+    model.eval()
+    val_data,val_label=next(iter(valloader))
+    before_val=model.block[0].weight.detach().clone()
+    with torch.no_grad():
+        val_pred=model(val_data)
+        val_loss=loss_fn(val_pred,val_label)
+    after_val=model.block[0].weight.detach().clone()
+
+    print("验证后参数变化：",not torch.equal(before_val,after_val))
+    print("验证批次loss：",val_loss.item())
