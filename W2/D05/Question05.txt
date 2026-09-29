@@ -1,0 +1,64 @@
+1.推理重载是加载已有权重做预测，不需要从头学习。精确续训则要恢复模型、优化器、轮次，
+以及影响后续训练顺序的状态；只加载模型参数不算精确续训。
+
+2.best是0.77那轮，last是0.75那轮
+
+3.model.state_dict() 是浅拷贝，其中的张量仍关联模型参数；仅写 best = model.state_dict()，
+后续训练可能让这个“best”跟着变化。刷新最佳成绩时应立即保存到文件，或复制参数。
+
+4.torch.load(path, map_location="cpu", weights_only=True)，把权重装入CPU上的同结构模型，
+调用 eval()，并让输入也在CPU上。
+
+5. 重载前后最大输出差和断点文件字段说明
+
+要比较同一个模型状态。D05.py 训练结束时的 model 对应 last.pth，
+所以这里读取 last.pth，不拿 best.pth 来和最后一轮的 model 比。
+
+第一步：在 D05.py 的训练循环结束后，先保存固定批次及重载前的输出：
+
+    fixed_images, _ = next(iter(val_loader))
+    model.eval()
+    with torch.no_grad():
+        output_before = model(fixed_images)
+
+    torch.save(
+        {"images": fixed_images, "output_before": output_before},
+        save_dir / "reload_check.pt"
+    )
+
+第二步：另建 D05_reload.py，单独运行它。这才是“新进程重载”：
+
+    import sys
+    from pathlib import Path
+    import torch
+
+    save_dir = Path(__file__).resolve().parent
+    sys.path.insert(0, str(save_dir.parent))
+    from D02.D02 import SimpleNet
+
+    check_data = torch.load(save_dir / "reload_check.pt", weights_only=True)
+    checkpoint = torch.load(save_dir / "last.pth", weights_only=True)
+
+    new_model = SimpleNet()
+    new_model.load_state_dict(checkpoint["model"])
+    new_model.eval()
+
+    with torch.no_grad():
+        output_after = new_model(check_data["images"])
+
+    max_diff = (check_data["output_before"] - output_after).abs().max().item()
+    print("重载前后最大输出差：", max_diff)
+    print("断点字段：", list(checkpoint.keys()))
+
+运行后记录：重载前后最大输出差 = ______（填写实际打印值，不预填）。
+差值应接近 0；如果明显不为 0，检查是否比较了同一批输入、同一轮权重，
+以及两个模型是否都调用了 eval()。
+
+last.pth 中各字段的含义：
+epoch：已经完成的训练轮数；model：模型参数；
+optimizer：优化器状态，继续训练时需要恢复；
+lr：训练时设置的学习率；batch_size：训练批大小；
+val_acc：这一轮的验证准确率。
+
+注意：当前断点没有保存随机数状态和数据加载器的打乱进度，
+因此可以从下一轮继续训练，但不能保证与从未中断的运行逐步完全一致。
