@@ -1,0 +1,211 @@
+1.因为残差add相差要求分辨率和通道数一致，concat只要求分辨率一致。而且残差相加也不是任意特征都可以。残差的目的
+是保证在深层网络中模型效果不会退化，所以其中一个要求是上层模型的输出，这样再算梯度时至少也大于1，不会比原有的差
+
+批改：7/15。形状对齐的判断正确，但残差连接不保证梯度大于1，也不保证效果一定不下降。
+标准答案：
+残差块把同一输入经过主分支得到的F(x)，与捷径分支的x或投影后的P(x)相加。
+两条分支应具有设计上的对应关系，并使batch、通道、高、宽匹配，不能任意拿两个特征直接相加。
+捷径提供直接的信息和梯度传播路径，有助于深层网络优化，但不是性能保证。
+例如标量y=x+F(x)的导数是1+F'(x)，当F'(x)=-1时导数为0，所以“梯度至少大于1”不成立。
+补充：concat要求除拼接轴外的其他维度一致，不是只要求分辨率一致。
+
+2.首先若[4,8,16,16]是上层输出X，那它应该经过一个conv2d(8,16,kernel_size=1,stride=2)
+首先若[4,16,8,8]是上层输出X，那他要经过nn.ConvTranspose2d(16,8,kernel_size=1,,stride=2)
+
+批改：12/15。第一种对齐方案正确；第二种有多余逗号，并且输出空间尺寸为15×15，不是16×16。
+标准答案：
+常用方案是把[4,8,16,16]投影为[4,16,8,8]，再与另一条分支相加：
+projection = nn.Conv2d(8, 16, kernel_size=1, stride=2)
+aligned = projection(x)  # x形状为[4,8,16,16]，aligned形状为[4,16,8,8]。
+
+如果选择向上对齐，也可以把[4,16,8,8]变成[4,8,16,16]：
+projection = nn.ConvTranspose2d(16, 8, kernel_size=2, stride=2)
+aligned = projection(x)  # 此时x形状为[4,16,8,8]。
+题目只需要给出一种有效方案。kernel_size=1、stride=2的转置卷积会把8变成15，不能直接用于这里的向上对齐。
+
+3.先检查是否处在model.eval()下，只有在评估模式下，BN层才会直接使用已有的BN层参数不会做更新。在model.train()
+下，即使冻结参数，也只会不改变模型权重参数，但是BN层依然会继续计算更新。
+
+批改：18/20。主要判断正确，但需要把“BN层参数”与“运行统计buffer”区分清楚。
+标准答案：
+冻结参数只阻止可学习参数更新，不会自动冻结BN的running_mean、running_var和num_batches_tracked。
+默认BN在train模式下，前向计算就会更新这些buffer，即使使用torch.no_grad()也会更新。
+应检查BN本身的training状态；整体model.training为False时，也可能有某个子模块仍处于train。
+评价时应确保相关BN层处于eval模式。eval固定的是默认BN的运行统计行为，不会自动把参数的requires_grad改成False。
+
+4.可能因为高光谱的波段数比较多一般大于100，其中有很多噪声和坏波段，这会导致BN分布受到影响，对于目标的分布
+容易受到噪声干扰，若要使用BN，应该先做以上预处理。
+
+批改：3/15。噪声可能影响数据分布，但没有回答本题“小batch”的核心问题。
+标准答案：
+BN2d对每个通道在batch和空间位置上估计均值、方差，也就是统计N×H×W个值。
+小batch可能使统计不稳定或缺乏代表性；如果高光谱patch相邻、重叠，样本高度相关，也要谨慎解释统计结果。
+因此，不能仅凭某一次验证准确率断言BN有效或无效。
+应固定数据划分和其他设置，比较不同batch下的运行统计及训练、验证表现，记录重复实验的波动。
+小batch不必然使BN失效，还要看空间尺寸和数据相关性；波段多、存在噪声也不等于BN一定不好。
+
+5.  torch.manual_seed(42)
+    Y = torch.ones(2, 3, 4, 4)
+    model = ResicBlock(3, 4, use_1x1conv=True, strides=1, drop_rate=0.4)
+
+    # named_buffers()提供名称和张量；clone()保存独立的数值快照。
+    train_before = {}
+    for name, buffer in model.named_buffers():
+        train_before[name] = buffer.clone()
+
+    model.train()
+    with torch.no_grad():
+        test1 = model(Y)
+        test2 = model(Y)
+    train_diff = (test1 - test2).abs().max().item()
+
+    train_after = {}
+    for name, buffer in model.named_buffers():
+        train_after[name] = buffer.clone()
+
+    # 训练结束的状态，也就是这次评价开始前的状态。
+    model.eval()
+    with torch.no_grad():
+        test3 = model(Y)
+        test4 = model(Y)
+    eval_diff = (test3 - test4).abs().max().item()
+
+    eval_after = {}
+    for name, buffer in model.named_buffers():
+        eval_after[name] = buffer.clone()
+
+    log_lines = [
+        "固定种子42；同一个全1输入，形状[2,3,4,4]；Dropout概率0.4。",
+        "整个残差块分别在train和eval下前向两次，没有反传或更新权重。",
+        f"训练两次输出是否相同：{torch.equal(test1, test2)}",
+        f"训练两次最大绝对差：{train_diff}",
+        f"评价两次输出是否相同：{torch.equal(test3, test4)}",
+        f"评价两次最大绝对差：{eval_diff}",
+    ]
+    for name in train_before:
+        log_lines.append(f"\n{name}")
+        log_lines.append(f"训练前：{train_before[name]}")
+        log_lines.append(f"训练后：{train_after[name]}")
+        log_lines.append(f"评价前：{train_after[name]}")
+        log_lines.append(f"评价后：{eval_after[name]}")
+
+    log_path = Path(__file__).resolve().parent / "bn_dropout_log.txt"
+    with open(log_path, "w", encoding="utf-8") as file:
+        for line in log_lines:
+            print(line)
+            file.write(line + "\n")
+    print("日志已保存到：", log_path)
+
+批改：35/35。代码和已有实验日志满足本题提交要求，这段实现可作为参考实现，无需重复抄写。
+标准答案说明：
+固定同一模型和输入，在train、eval模式下分别重复前向两次；记录两次输出的最大绝对差。
+用clone()分别保存BN buffer的前后快照，避免只保存引用或打印生成器对象。
+已有bn_dropout_log.txt中的实际结果：
+train两次最大输出差：5.258315086364746。
+eval两次最大输出差：0.0。
+BN1、BN2的运行均值和方差在train前向后变化，eval前向后保持不变。
+两层的num_batches_tracked均从0变为2，eval后仍为2。
+这里没有反向传播或optimizer.step()；“train两次”指训练模式下前向两次，不是完成两次参数更新。
+不同随机种子、输入或实现可能得到不同差值，不应把上述数字当成所有实验的固定答案。
+
+
+6. W03-D02-Q06（补充题，不计入原100分）
+
+题目：参数与buffer有什么区别？结合卷积层和BN层，说明它们在创建模型时如何产生、训练时如何更新、如何保存和加载，以及重载后在训练和推理中分别起什么作用。
+
+参考答案：
+
+（1）分别是什么，如何产生？
+参数是模型用于学习的数值，例如卷积层的weight、bias，以及BN的缩放weight和偏移bias。
+创建nn.Conv2d或nn.BatchNorm2d时，这些参数会自动建立并初始化，不是训练之后才产生。
+
+buffer是登记在模型中、但不作为可学习参数的张量状态。默认BN会自动建立：
+running_mean：运行均值，初始为0。
+running_var：运行方差，初始为1。
+num_batches_tracked：经过的训练批次数，初始为0。
+
+buffer不是BN专属，也可以用register_buffer自行登记。普通Conv2d默认没有buffer，但有参数；没有buffer不代表没有保存卷积权重。
+这些内容起初保留在内存中的模型对象里，执行torch.save后才写入文件。
+
+（2）训练时分别如何更新？
+参数通常由loss.backward()计算梯度，再由optimizer.step()更新；只做前向计算不会更新普通卷积的权重。
+默认BN在train模式下，用当前批次统计进行归一化，并在前向计算时更新运行统计和计数，不需要反向传播或optimizer.step()。
+所以，冻结参数或使用torch.no_grad()，都不能单独阻止train模式下的BN统计更新。buffer是否更新、怎样更新，取决于对应模块的实现。
+
+（3）如何查看、保存和加载？
+model.named_parameters()：查看参数名称和张量。
+model.named_buffers()：查看buffer名称和张量。
+model.state_dict()：同时包含参数和需要保存的buffer；用persistent=False登记的buffer不在其中。
+torch.load()：把文件读回内存。
+new_model.load_state_dict()：把读回的参数和buffer一起恢复到结构匹配的新模型中，不需要另写一次buffer加载。
+
+示例代码：
+# 假设原model是ResicBlock(3, 4, use_1x1conv=True, strides=1, drop_rate=0.4)。
+# 这段放在已有model的代码后；torch、Path和ResicBlock沿用D02.py中的定义。
+save_path = Path(__file__).resolve().parent / "buffer_example.pth"
+torch.save(model.state_dict(), save_path)
+
+new_model = ResicBlock(3, 4, use_1x1conv=True, strides=1, drop_rate=0.4)
+saved = torch.load(save_path, map_location="cpu", weights_only=True)
+new_model.load_state_dict(saved)  # 同时恢复参数和buffer。
+
+print("卷积权重恢复一致：", torch.equal(model.conv1.weight, new_model.conv1.weight))
+print("BN运行均值恢复一致：", torch.equal(model.bn1.running_mean, new_model.bn1.running_mean))
+
+new_model.eval()  # 模式要自己设置，不会随state_dict自动恢复。
+data = torch.ones(2, 3, 4, 4)
+with torch.no_grad():
+    pred = new_model(data)
+print("重载后输出形状：", pred.shape)
+
+（4）在新模型中分别起什么作用？
+参数：卷积权重负责计算特征，BN的weight和bias负责缩放、平移归一化后的特征；它们在训练和推理的前向计算中都会用到。
+buffer：对于默认BN，eval模式下使用加载的运行均值和方差进行归一化，并保持统计不变；train模式下使用当前批次统计进行归一化，再从加载的运行统计和计数继续更新。
+num_batches_tracked不是模型的epoch；它记录BN经过的训练批次数，在momentum=None时还影响运行统计的更新比例。
+
+（5）为什么两类状态都要恢复？
+若只恢复卷积等参数，没有正确恢复BN的运行统计，eval输出可能与保存前不同。
+若想继续训练，还需要另行恢复优化器、epoch等状态；仅加载model.state_dict()不等于精确续训，也不会恢复requires_grad冻结设置。
+
+记忆句：参数负责学习，buffer保留非学习状态；load_state_dict一起恢复它们，前向计算按模块和模式使用它们。
+
+参考资料：
+PyTorch Module（参数、buffer与state_dict）：https://docs.pytorch.org/docs/2.14/generated/torch.nn.Module.html
+PyTorch BatchNorm2d（train/eval中的统计行为）：https://docs.pytorch.org/docs/2.14/generated/torch.nn.BatchNorm2d.html
+
+
+6.补练：model.eval()
+    print("模型整体是否为train：", model.training)
+    #这里会输出 False，但不代表每个子模块都是eval。
+    model.bn1.train()
+    for name,module in model.named_modules():
+        if module.training:
+            print("仍处于训练模式的模块：",name)
+    model.eval()
+    for name, module in model.named_modules():
+        if module.training:
+            print("仍处于train的模块：", name)
+
+补练批改：逻辑正确。建议在model.bn1.train()之后打印整体状态，更清楚地展示“整体为eval，但BN1仍为train”。
+补练标准答案（沿用已有model）：
+model.eval()
+model.bn1.train()
+print("模型整体是否为train：", model.training)  # False，但BN1仍为train。
+
+for name, module in model.named_modules():
+    if module.training:
+        print("仍处于train的模块：", name)  # 定位到bn1。
+
+model.eval()  # 修复：重新把全部子模块设为eval。
+for name, module in model.named_modules():
+    if module.training:
+        print("仍处于train的模块：", name)  # 修复后不应打印任何模块。
+
+本次批改汇总：
+Q01：7/15；Q02：12/15；Q03：18/20；Q04：3/15；Q05：35/35。
+总分：75/100。第六题已有参考答案，补练不计入这100分。
+优先订正：第1题的残差作用与梯度判断，第4题的小batch与BN统计。
+
+补充依据：
+残差网络原论文：https://arxiv.org/abs/1512.03385
+转置卷积官方说明：https://docs.pytorch.org/docs/2.14/generated/torch.nn.ConvTranspose2d.html

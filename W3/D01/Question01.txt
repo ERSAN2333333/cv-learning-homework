@@ -1,0 +1,95 @@
+1，卷积核数量对应的应该是输出通道，和输入通道不是一个概念。感受野是经过多层卷积后小小一个范围的区域原本应该
+对应卷积前大几倍甚至十几倍的区域。
+
+【标准答案】
+三者不是同一概念。在普通Conv2d中，输出通道数等于滤波器的数量；输入通道数是输入数据每个位置有多少个通道。
+一个输出位置的感受野，是它在原始输入中能“看到”的区域。一层3×3卷积的一个输出位置通常对应输入的3×3邻域；
+多层卷积叠加后，感受野可能扩大，但不要求一定经过多层。
+
+2.输出(2,8,16,16)，参数量3*8*3*3+8=224
+
+【标准答案】
+每个空间轴的输出尺寸＝向下取整[(32＋2×1－3)÷2]＋1＝16。
+因此输出形状为[2,8,16,16]。权重数＝8×3×3×3＝216，偏置数＝8，总参数量＝224。
+
+3.首先应该关注卷积层的输出大小，HWC的话大概率会改变输出的像素大小得到一个不符合预期的分辨率。其次在输入前
+可以将先进行输入形状的检测。
+
+【标准答案】
+Conv2d需要[N,C,H,W]（单张图可用[C,H,W]），不能把[H,W,C]直接当成通道在前的输入。
+如果H恰好等于卷积层要求的输入通道数，程序可能不报错，但会把高度误当通道。
+应先根据已知的H、W、C检查每条轴的含义，再构造不同通道和位置带不同标记值的小样本，
+检查输出是否对应预期位置；只看最终shape不一定能发现这种静默错误。
+正确转换是把HWC的轴重排为CHW，例如单张图使用x.permute(2,0,1)。
+
+4.首先输入会改变(B,103,H,W)，卷积层也应该从conv2d(3,output_channel,**)改成conv2d(103,output_channel)
+参数量由原本的3*3*3+output_channel变成103*3*3+output_channel，计算量会变成原本的103/3倍
+
+【标准答案】
+RGB批次输入形状为[B,3,H,W]，使用nn.Conv2d(3,16,3)；
+103波段高光谱批次为[B,103,H,W]，使用nn.Conv2d(103,16,3)。
+如果两者的stride、padding和图像高宽相同，输出的空间尺寸相同，输出通道数也都是16。
+默认带bias时，RGB参数量＝16×3×3×3＋16＝448；
+高光谱参数量＝16×103×3×3＋16＝14848。
+每个输出位置的卷积乘加计算量约增加到103÷3倍；偏置不按这个倍数增加。
+
+5.Y=torch.rand(2,3,32,32)
+Z=torch.rand(2,103,32,32)
+conv_test=nn.Conv2d(3,8,kernel_size=3,padding=1,stride=1)
+Y=conv_test(Y)
+assert Y.shape==(2,8,32,32)
+conv_test2=nn.Conv2d(8,9,kernel_size=3,padding=1,stride=2)
+Y=conv_test2(Y)
+assert Y.shape==(2,9,16,16)
+assert conv_test.weight.numel()+conv_test.bias.numel()==224
+assert conv_test2.weight.numel()+conv_test2.bias.numel()==657
+#脉冲
+conv1 = nn.Conv2d(3, 1, kernel_size=3, padding=1, stride=1, bias=False)
+with torch.no_grad():
+    conv1.weight.fill_(1)
+
+Y = conv1(X)
+print(torch.nonzero(Y[0]))  # 查看输出哪些位置不为0
+
+【标准答案：一份可单独运行的参考代码】
+import torch
+import torch.nn as nn
+import matplotlib.pyplot as plt
+
+# 两层只改变stride，输入通道、输出通道、卷积核和padding保持一样。
+x = torch.zeros(1, 3, 32, 32)
+x[0, 0, 16, 16] = 1
+conv_s1 = nn.Conv2d(3, 1, 3, padding=1, stride=1)
+conv_s2 = nn.Conv2d(3, 1, 3, padding=1, stride=2)
+
+# 固定权重并清零偏置，让单点脉冲的响应容易观察。
+with torch.no_grad():
+    conv_s1.weight.fill_(1)
+    conv_s1.bias.zero_()
+    conv_s2.weight.fill_(1)
+    conv_s2.bias.zero_()
+
+y1 = conv_s1(x)
+y2 = conv_s2(x)
+assert y1.shape == (1, 1, 32, 32)
+assert y2.shape == (1, 1, 16, 16)
+assert conv_s1.weight.numel() + conv_s1.bias.numel() == 28
+assert conv_s2.weight.numel() + conv_s2.bias.numel() == 28
+
+fig, axes = plt.subplots(1, 2, figsize=(8, 4))
+axes[0].imshow(y1[0, 0].detach().numpy(), cmap="gray")
+axes[0].set_title("stride=1")
+axes[1].imshow(y2[0, 0].detach().numpy(), cmap="gray")
+axes[1].set_title("stride=2")
+plt.tight_layout()
+plt.show()
+
+这里两层参数量相同，因为stride改变的是采样间隔，不是权重张量的大小。
+
+
+6.补练，假设stride=2,31和32向下取整最后得到的宽高结果应该是一样的，非整除下取样就是得到的带小数结果抹去小数点
+
+【标准答案】
+卷积核3、padding1、stride2时：输入31得到向下取整[(31＋2－3)÷2]＋1＝16；
+输入32得到向下取整[(32＋2－3)÷2]＋1＝16。
+所以两种输入都会输出16。向下取整发生在除法之后，再加1；不能把整条式子的结果随意截断。
