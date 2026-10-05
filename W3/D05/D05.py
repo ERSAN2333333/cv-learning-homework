@@ -52,7 +52,7 @@ result = metrics(y_true, y_pred, 3)
 core_matrix = result["confusion"]
 
 
-print("core.py计算的矩阵：")
+print("core.py计算的矩阵:")
 for row in core_matrix:
     print(row)
 
@@ -61,7 +61,7 @@ assert my_matrix == core_matrix, "自己统计的矩阵与core.py不一致"
 # sklearn返回数组，转为列表后，就能使用同样的方式比较。
 sklearn_matrix = confusion_matrix(y_true, y_pred, labels=[0, 1, 2])
 assert my_matrix == sklearn_matrix.tolist(), "自己统计的矩阵与sklearn不一致"
-print("核对通过：手工计数、core.py和sklearn的混淆矩阵完全一致")
+print("核对通过:手工计数、core.py和sklearn的混淆矩阵完全一致")
 
 
 print(result)
