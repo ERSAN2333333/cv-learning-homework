@@ -1,0 +1,6 @@
+小测试1/1：step=1，样本数=32，更新前loss=1.809076，一次更新已完成
+权重字段：step, model, optimizer, classes, config, fixed_images, fixed_labels, reference_logits
+本次仅一次小批次更新，best=last，未进行验证集择优。
+best：重载输出最大差=0，预测类别一致=True
+last：重载输出最大差=0，预测类别一致=True
+核验通过：新进程重载best和last后，输出分别与保存前一致。

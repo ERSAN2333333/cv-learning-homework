@@ -1,0 +1,23 @@
+1.如果主干model.train,主干requires_grad=False并没有同时冻结了BN运行统计,只有model.eval()才会不进行
+BN运行统计，二是直接采用buffers中已有的运行统计。而requires_grad只是截断了梯度更新，并不影响buffers.
+
+2.应该对已经冻结的主干模型部分使用model.eval(),对需要训练更新的部分使用model.train()
+
+3.【新增】主干参数、BN状态和分类头更新的前后核对表
+
+操作：固定取出的同一个小批次，保持model.eval()、model.fc.train()，
+执行一次前向传播、loss.backward()和optimizer.step()；优化器只包含分类头参数。
+
+核对项                          更新前                  更新后（预期）                 判断方式
+主干参数（含BN的weight、bias）   保存原始参数            与原始参数完全相同             torch.equal为True
+BN running_mean                 保存原始运行均值        与原始值完全相同               torch.equal为True
+BN running_var                  保存原始运行方差        与原始值完全相同               torch.equal为True
+BN num_batches_tracked          保存原始计数            计数不增加                     torch.equal为True
+分类头fc.weight                 保存原始权重            与原始权重不同                 torch.equal为False
+分类头fc.bias                   保存原始偏置            与原始偏置不同                 torch.equal为False
+分类头梯度                      清零后为None            backward后存在、有限且非零     检查parameter.grad
+
+预期结论：主干参数和BN运行统计保持不变，分类头获得梯度并完成一次更新。
+实测说明：本表填写的是预期结果，尚未核实实际运行输出。
+运行D03.py后，若所有断言通过并输出“核验通过：主干未变，分类头有梯度且已更新一次。”，
+即可确认本次实测与表中预期一致。

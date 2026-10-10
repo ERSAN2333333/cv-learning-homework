@@ -1,0 +1,35 @@
+W04-D02-Q03：真实运行日志
+权重来源：torchvision官方ImageNet预训练权重
+权重枚举： ResNet50_Weights.IMAGENET1K_V2
+1762
+376
+训练集类别映射： {'cardboard': 0, 'glass': 1, 'metal': 2, 'paper': 3, 'plastic': 4, 'trash': 5}
+验证集类别映射： {'cardboard': 0, 'glass': 1, 'metal': 2, 'paper': 3, 'plastic': 4, 'trash': 5}
+检查通过：训练和验证类别映射完全一致
+训练预处理操作: Compose(
+    RandomResizedCrop(size=(224, 224), scale=(0.7, 1.0), ratio=(0.75, 1.3333), interpolation=bilinear, antialias=True)
+    RandomHorizontalFlip(p=0.5)
+    ToTensor()
+    Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+)
+验证推理预处理操作: ImageClassification(
+    crop_size=[224]
+    resize_size=[232]
+    mean=[0.485, 0.456, 0.406]
+    std=[0.229, 0.224, 0.225]
+    interpolation=InterpolationMode.BILINEAR
+)
+输入形状： torch.Size([1, 3, 224, 224])
+数值范围： -1.647581696510315 2.6225709915161133
+同图来源： /Users/ersan/Downloads/dataset/dataset-split/val/cardboard/cardboard12.jpg
+变换前图片： /Users/ersan/rs_cvpy/cv_learning/W4/D02/Q03_before.png
+变换后展示图： /Users/ersan/rs_cvpy/cv_learning/W4/D02/Q03_after.png
+类别对照表： /Users/ersan/rs_cvpy/cv_learning/W4/D02/Q03_classes.txt
+分类头输入维度： 2048
+图片形状： torch.Size([32, 3, 224, 224])
+logits形状： torch.Size([32, 6])
+标签形状： torch.Size([32])
+标签类型： torch.int64
+标签范围： 0 5
+单批前向检查通过
+实际运行日志已保存： /Users/ersan/rs_cvpy/cv_learning/W4/D02/Q03_forward_log.txt

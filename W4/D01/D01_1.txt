@@ -1,0 +1,118 @@
+-----------打开自己的第2周训练脚本，画Dataset→模型→损失→更新→验证→保存主线。-----------------
+1.首先创建DataSet在55，56行，分别创建了训练和验证的，数据加载器在58，59行，模型定义在64行，损失定义在65行
+loss计算在74行train_one_epoch函数的21行，更新是在train_one_epoch函数中23行，验证在75行val_one_epoch
+保存主线84行，87行分别保存了last和best模型
+2.定义数据集->传入DataSet中->将数据集传入数据加载器->从数据加载器取出数据送入model->计算预测结果并计算loss
+->loss反向传播->优化器更新参数->训练结束->评估模式->计算acc->更新last.pth并对比更新best.pth
+3.训练模式下每个batch执行优化器参数清零，损失计算，反向传播，参数更新，验证模式下每个batch执行损失计算，
+准确率计算。每个batch执行保存last.pth和对比验证模式下acc，若高于best.pth的acc，则更新best.pth并更新
+best_acc为当前的acc。
+
+
+【批改与订正｜2026-10-07】
+核对脚本：W2/D06/D06_train.py（行号以本次检查版本为准）。
+总体评价：已找到主要代码位置，理解了训练→验证→保存的基本顺序；
+但把每batch和每epoch的执行频率混淆了，并写入了脚本中没有的验证loss计算。
+本项是流程梳理任务，未指定单独分值，这里不另设分数。
+
+一、原答案正确的部分
+1. Dataset在55—56行，DataLoader在58—59行，模型创建在64行，损失函数创建在65行。
+2. 74行调用训练函数；实际loss计算在21行，反向传播在22行，参数更新在23行。
+3. 75行调用验证函数；84行保存last，87行按条件保存best，定位正确。
+4. 验证准确率超过历史最佳时更新best_acc和best.pth，判断方向正确。
+
+二、需要修改的部分
+1. “模型定义在64行”更准确地说是创建模型实例；模型结构定义在model_resnet18.py。
+2. “训练结束→验证”指本轮训练结束，不是15轮全部训练结束后才验证。
+3. 当前val_one_epoch没有计算验证loss，只做前向预测，累计正确数和样本数，
+   全部验证batch结束后才计算整个验证集的准确率。
+4. 保存不在batch循环中，而在epoch循环中：每轮训练和验证结束后保存一次last，
+   再根据整份验证集的val_acc决定是否保存best。
+5. optimizer.zero_grad()清空的是梯度，不是把模型参数清零。
+6. best比较的是内存变量best_acc；代码没有每轮读取best.pth来取得历史准确率。
+
+三、订正后的实际流程图
+
+【开始前：执行一次】
+天气图片目录weather_data/train、weather_data/val
+    ↓
+ImageFolder创建训练/验证Dataset，指定Resize(128×128)和ToTensor
+    ↓
+创建DataLoader：batch_size=32，训练打乱，验证不打乱
+    ↓
+创建ResNet18并移到MPS；创建CrossEntropyLoss、Adam；best_acc=-1
+    ↓
+【epoch循环：共15轮】
+    │
+    ├─ train_one_epoch：model.train()
+    │      ↓
+    │  遍历训练DataLoader【以下操作每个训练batch执行】
+    │      Dataset读取图片并做预处理，DataLoader组成(images, labels)
+    │      → 图片与标签移到MPS
+    │      → optimizer.zero_grad()清空梯度
+    │      → pred=model(images)前向预测
+    │      → loss=loss_fn(pred, labels)计算损失
+    │      → loss.backward()计算梯度
+    │      → optimizer.step()更新参数
+    │      → 累计样本加权loss、正确数和样本数
+    │      → 继续下一个训练batch
+    │      ↓
+    │  全部训练batch结束：打印本轮平均loss与训练准确率
+    │
+    ├─ val_one_epoch：model.eval() + torch.no_grad()
+    │      ↓
+    │  遍历验证DataLoader【以下操作每个验证batch执行】
+    │      图片与标签移到MPS
+    │      → pred=model(images)
+    │      → 累计正确数和样本数
+    │      → 继续下一个验证batch
+    │      ↓
+    │  全部验证batch结束：val_acc=总正确数/总样本数，打印并返回
+    │  注意：这里不计算loss、不反向传播、不执行optimizer.step()
+    │
+    └─ 【每轮验证结束后】
+           构造checkpoint：轮次、学习率、模型状态、优化器状态、batch_size、val_acc
+           → 保存last.pth
+           → 判断val_acc > best_acc？
+               是：更新best_acc，保存best.pth
+               否：保留原best_acc和best.pth
+           → 进入下一轮，训练函数再次调用model.train()
+    ↓
+15轮结束，脚本结束
+
+四、执行频率小结
+- 初始化：Dataset、DataLoader、模型、损失函数、优化器各创建一次。
+- 每个训练batch：清梯度→前向→loss→反传→更新→累计指标。
+- 每个验证batch：前向→累计正确数与样本数。
+- 每个epoch：训练完整一轮→验证完整一轮→保存last→判断是否更新best。
+
+以上保留原作答并追加订正；未修改或运行训练脚本。
+
+
+
+---------------比较自己的随机初始化ResNet18与torchvision预训练ResNet18；记录结构、权重来源和输入变换。--------
+1.对于resnet18，两者都用了一个conv2d+maxpool+4个layer层，卷积层后一般跟随bn和relu，通过nn.Sequential和
+BasicBlock将大体结构连接，两者的输入通道和输出类别数以及模型层结构等设置都是一致的
+2.我自己定义的resnet18是随机生成的参数，预训练的话是加载torchvision.models.resnet18的
+ResNet18_Weights.IMAGENET1K_V1里面的权重参数是已有的训练结果在imagenet1000上的
+3.自己定义的可以使用自己的预处理定义，但使用预训练权重时应该与其预处理保持一致，例如RandomResizedCrop(224)
+RandomHorizontalFlip,ToTensor(),Normalize(mean=[0.485, 0.456, 0.406],std=[0.229, 0.224, 0.225])
+
+【第二题订正答案】
+1. 结构：两者都输入RGB三通道图片，骨干为卷积、BN、ReLU、最大池化，
+   接4个残差阶段（每阶段2个BasicBlock），最后自适应平均池化和全连接分类头。
+   我的天气分类头是Linear(512, 5)，官方原始分类头是Linear(512, 1000)。
+   用官方模型做天气分类时，需要把分类头替换成5类，不能直接说输出类别数相同。
+
+2. 权重来源：我的模型未加载预训练权重，卷积使用Kaiming随机初始化；
+   官方加载ResNet18_Weights.IMAGENET1K_V1，即ImageNet-1K预训练权重。
+   替换后的5类分类头重新初始化，需要训练；BN等参数不一定随机初始化。
+
+3. 输入变换：我的第2周脚本使用Resize((128,128))和ToTensor()，没有Normalize。
+   官方权重的配套验证变换是：短边Resize到256 → CenterCrop(224) →
+   转浮点并缩放到[0,1] → Normalize，mean=[0.485,0.456,0.406]，
+   std=[0.229,0.224,0.225]；可直接使用weights.transforms()。
+   RandomResizedCrop和RandomHorizontalFlip属于可选训练增强，不是上述验证变换。
+
+结论：骨干结构基本一致，但当前分类头、初始权重来源和输入变换不同。
+若后续比较准确率，不能把差异全部归因于是否使用预训练。

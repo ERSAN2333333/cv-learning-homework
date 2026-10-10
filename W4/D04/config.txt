@@ -1,0 +1,29 @@
+解释器:/Users/ersan/miniforge3/bin/python
+Python版本:3.13.12 | packaged by conda-forge | (main, Feb  5 2026, 06:11:05) [Clang 19.1.7 ]
+设备:cpu
+预训练权重：IMAGENET1K_V2
+训练数据：/Users/ersan/Downloads/dataset/dataset-split/train
+类别表：['cardboard', 'glass', 'metal', 'paper', 'plastic', 'trash']
+batch_size：32
+优化器：Adam (
+Parameter Group 0
+    amsgrad: False
+    betas: (0.9, 0.999)
+    capturable: False
+    decoupled_weight_decay: False
+    differentiable: False
+    eps: 1e-08
+    foreach: None
+    fused: None
+    lr: 0.001
+    maximize: False
+    weight_decay: 0
+)
+训练范围：仅分类头，主干及BN保持eval
+训练变换：Compose(
+    RandomResizedCrop(size=(224, 224), scale=(0.7, 1.0), ratio=(0.75, 1.3333), interpolation=bilinear, antialias=True)
+    RandomHorizontalFlip(p=0.5)
+    ToTensor()
+    Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+)
+测试规模：一个批次，更新一次

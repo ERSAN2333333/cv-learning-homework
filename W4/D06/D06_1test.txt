@@ -1,0 +1,66 @@
+1.预训练是一个别人已经训练好设置好参数和超参数的模型，这其中包含了模型主干和分类头，将预训练模型用自己的数
+据集上是迁移学习，可以选择冻结模型主干只训练分类头，也可以选择将整个网络都不冻结全部用来训练。冻结就是
+冻结某些结构的参数，取消这部分的梯度计算，微调就是修改某些结构比如分类头，微调一般需要冻结别的结构。
+
+2.首先可以使用model.name_modules方法，找出那些module.training，以此来确认那些模块处于训练模式或者
+测试模式，这里需要关注BN层，BN层只有处在eval模式下才不会改变运行统计。冻结主干只是将主干设置为不参与梯度
+计算，但是BN层的运行统计依然会改变。
+我设置的方法是在dataset中定义编号和类别的对应关系，这里如果模型输出的类名与编号不对应，首先应该检查模型
+使用的数据加载器的数据集里面这个对应关系是否正确，其次应该检查在模型输出logits时映射类名的关系是否正确。
+
+3.from torchvision.models import resnet50
+model=resnet50(weights=None)
+fc_num=model.fc.in_channel
+model.fc=torch.nn.Linear(fc_num,len(name_lsit))
+model.load_state_dict(torch.load("best.pth"))
+
+image,label in next(iter(train_loader)):
+pred_label=model(image).argmax(dim=1)
+pred_name=dataset.name_lsit[pred_label]
+label_name=dataset.name_lsit[label]
+print(f"真实标签{label_name},预测标签{pred_name}")
+
+准确率提高了，但是可能模型的预处理发生变化，比如选取了更好的归一化处理或者选取了更好的学习率初始化和优化器
+
+【订正】第1项：概念关系
+预训练：模型已经在其他数据上学习了一组参数，但原来的超参数不一定适合新任务。
+主干负责提取特征，分类头负责把特征映射到类别。
+迁移学习：利用已有模型的知识完成新任务。
+冻结：设置requires_grad=False，使指定参数不计算梯度、不参与常规梯度更新；不会自动切换BN模式。
+微调：用新数据继续训练已有模型的部分或全部参数，不一定冻结其他层。
+替换分类头是结构调整，随后训练分类头才是参数学习。
+
+【订正】第2项：定位错误
+BN：使用model.named_modules()，查看BN层的module.training。验证时应为False；只训练分类头时，主干BN也应保持eval。
+requires_grad=False不会阻止train模式下的BN更新运行统计；model.eval()才会让常规BN使用已有运行统计。
+类别表：核对训练时保存的类别顺序、当前Dataset标签编号，以及预测编号到类别名称的映射，三者应一致。
+检查BN的简单写法：
+for name, module in model.named_modules():
+    if isinstance(module, torch.nn.BatchNorm2d):
+        print(name, module.training)
+
+【订正】第3项：独立重载与预测
+下面是重载参考代码：先按原实验的验证预处理建立val_loader，best.pth需改为本实验权重的实际路径。
+示例假设检查点保存了完整模型参数model和类别表classes，且模型结构与原实验一致。
+
+import torch
+from torchvision.models import resnet50
+
+checkpoint = torch.load("best.pth", map_location="cpu", weights_only=False)
+classes = checkpoint["classes"]
+assert classes == val_loader.dataset.name_list, "类别顺序不一致"
+model = resnet50(weights=None)
+model.fc = torch.nn.Linear(model.fc.in_features, len(classes))
+model.load_state_dict(checkpoint["model"])
+model.eval()
+
+image, label = next(iter(val_loader))
+with torch.no_grad():
+    pred_label = model(image.cpu()).argmax(dim=1)
+for true_id, pred_id in zip(label.cpu().tolist(), pred_label.tolist()):
+    print(f"真实标签：{classes[true_id]}，预测标签：{classes[pred_id]}")
+
+一项不能归因的观察：准确率提高了，但预处理或训练设置也发生变化，因此不能将提升单独归因于预训练。
+应使用实际发生的变化描述实验；没有改变的设置不要写成已改变。
+
+实践状态：这是订正和参考代码，尚未实际验证独立重载。当前D05.py没有保存模型权重，需要先保存对应实验的权重及类别表，再完成重载和预测展示。

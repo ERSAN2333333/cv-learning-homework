@@ -1,0 +1,7 @@
+类别	train编号	val编号
+cardboard	0	0
+glass	1	1
+metal	2	2
+paper	3	3
+plastic	4	4
+trash	5	5
